@@ -134,21 +134,25 @@ app.post('/api/auth/registro', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
   console.log('----------------------------------------------------');
-  console.log('BACKEND: INICIO RUTA POST /api/auth/login');
-  console.log('BACKEND: req.headers["content-type"]:', req.headers['content-type']); // Para ver si es application/json
-  console.log('BACKEND: Cuerpo de la petición (req.body) ANTES de desestructurar:', JSON.stringify(req.body, null, 2));
+  console.log('BACKEND RUTA: /api/auth/login INVOCADA');
+  console.log('BACKEND req.method:', req.method);
+  console.log('BACKEND req.originalUrl:', req.originalUrl);
+  console.log('BACKEND req.headers["content-type"]:', req.headers['content-type']);
+  console.log('BACKEND req.body (ANTES de desestructurar):', req.body); // Este es el más importante
   console.log('----------------------------------------------------');
 
-  const { loginIdentifier, contrasena } = req.body;
+  const { loginIdentifier, contrasena } = req.body; // Intento de desestructurar
 
-  // Loguear los valores después de desestructurar
-  console.log('BACKEND: loginIdentifier extraído:', loginIdentifier);
-  console.log('BACKEND: contrasena extraída:', contrasena);
+  // Loguear los valores DESPUÉS de desestructurar
+  console.log('BACKEND loginIdentifier (DESPUÉS de desestructurar):', loginIdentifier);
+  console.log('BACKEND contrasena (DESPUÉS de desestructurar):', contrasena);
 
   if (!loginIdentifier || !contrasena) {
-    console.log('BACKEND: Validación falló - loginIdentifier o contrasena están vacíos/undefined.');
+    console.log('BACKEND VALIDACIÓN FALLÓ: loginIdentifier o contrasena es falsy.');
     return res.status(400).json({ message: 'Identificador de inicio de sesión y contraseña son requeridos.' });
   }
+
+  console.log('BACKEND VALIDACIÓN PASÓ: Intentando procesar login...');
 
   try {
     // Intentar encontrar al usuario por correo O por username
@@ -158,23 +162,28 @@ app.post('/api/auth/login', async (req, res) => {
     );
 
     if (usuarios.length === 0) {
+      console.log('BACKEND LOGIN: Usuario no encontrado con el identificador:', loginIdentifier);
       return res.status(401).json({ message: 'Credenciales inválidas.' });
     }
 
     const usuario = usuarios[0];
+    console.log('BACKEND LOGIN: Usuario encontrado:', usuario.correo, usuario.username);
     const esContrasenaValida = await bcrypt.compare(contrasena, usuario.contrasena);
 
     if (!esContrasenaValida) {
+      console.log('BACKEND LOGIN: Contraseña incorrecta para:', loginIdentifier);
       return res.status(401).json({ message: 'Credenciales inválidas.' });
     }
 
+    console.log('BACKEND LOGIN: Login exitoso para:', loginIdentifier);
     const { contrasena: _, ...usuarioParaEnviar } = usuario;
     res.json({
       message: 'Inicio de sesión exitoso.',
       usuario: usuarioParaEnviar
     });
+
   } catch (error) {
-    console.error('Error en /api/auth/login:', error);
+    console.error('BACKEND LOGIN: Error en el bloque try-catch:', error);
     res.status(500).json({ message: 'Error interno del servidor durante el login.' });
   }
 });
