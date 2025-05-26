@@ -1,0 +1,79 @@
+<div class="auth-container">
+    <h2>Crear Cuenta</h2>
+    <form (ngSubmit)="onSubmit()" #registroForm="ngForm" class="auth-form">
+      <div *ngIf="errorMessage" class="error-message">
+        {{ errorMessage }}
+      </div>
+      <div *ngIf="successMessage" class="success-message">
+        {{ successMessage }}
+      </div>
+  
+      <div class="form-group">
+        <label for="registro-nombre">Nombre:</label>
+        <input type="text" 
+               id="registro-nombre" 
+               [(ngModel)]="datosUsuario.nombre" 
+               name="nombre" 
+               required 
+               #nombreInput="ngModel"
+               [ngClass]="{'input-error': nombreInput.invalid && (nombreInput.dirty || nombreInput.touched)}">
+        <div *ngIf="nombreInput.invalid && (nombreInput.dirty || nombreInput.touched)" class="validation-error">
+          <small *ngIf="nombreInput.errors?.['required']">El nombre es requerido.</small>
+        </div>
+      </div>
+  
+      <div class="form-group">
+        <label for="registro-apellido">Apellido:</label>
+        <input type="text" 
+               id="registro-apellido" 
+               [(ngModel)]="datosUsuario.apellido" 
+               name="apellido" 
+               required
+               #apellidoInput="ngModel"
+               [ngClass]="{'input-error': apellidoInput.invalid && (apellidoInput.dirty || apellidoInput.touched)}">
+        <div *ngIf="apellidoInput.invalid && (apellidoInput.dirty || apellidoInput.touched)" class="validation-error">
+          <small *ngIf="apellidoInput.errors?.['required']">El apellido es requerido.</small>
+        </div>
+      </div>
+  
+      <div class="form-group">
+        <label for="registro-correo">Correo Electrónico:</label>
+        <input type="email" 
+               id="registro-correo" 
+               [(ngModel)]="datosUsuario.correo" 
+               name="correo" 
+               required 
+               email
+               #correoRegInput="ngModel"
+               [ngClass]="{'input-error': correoRegInput.invalid && (correoRegInput.dirty || correoRegInput.touched)}">
+        <div *ngIf="correoRegInput.invalid && (correoRegInput.dirty || correoRegInput.touched)" class="validation-error">
+          <small *ngIf="correoRegInput.errors?.['required']">El correo es requerido.</small>
+          <small *ngIf="correoRegInput.errors?.['email']">Ingrese un correo válido.</small>
+        </div>
+      </div>
+  
+      <div class="form-group">
+        <label for="registro-contrasena">Contraseña:</label>
+        <input type="password" 
+               id="registro-contrasena" 
+               [(ngModel)]="datosUsuario.contrasena" 
+               name="contrasena" 
+               required 
+               minlength="6"
+               #contrasenaRegInput="ngModel"
+               [ngClass]="{'input-error': contrasenaRegInput.invalid && (contrasenaRegInput.dirty || contrasenaRegInput.touched)}">
+        <div *ngIf="contrasenaRegInput.invalid && (contrasenaRegInput.dirty || contrasenaRegInput.touched)" class="validation-error">
+          <small *ngIf="contrasenaRegInput.errors?.['required']">La contraseña es requerida.</small>
+          <small *ngIf="contrasenaRegInput.errors?.['minlength']">La contraseña debe tener al menos 6 caracteres.</small>
+        </div>
+      </div>
+  
+      <!-- El rol se asigna por defecto a 'cliente' en el backend, no es necesario aquí para el usuario -->
+  
+      <button type="submit" [disabled]="registroForm.invalid" class="auth-button">Registrarse</button>
+    </form>
+  
+    <div class="auth-links">
+      <p>¿Ya tienes una cuenta? <a routerLink="/login">Inicia sesión aquí</a></p>
+    </div>
+</div>
