@@ -17,7 +17,7 @@ import { AuthService, AuthResponseSimple } from '../../services/auth.service';
   styleUrls: ['./login.component.css'] // Asegúrate de tener este archivo o coméntalo
 })
 export class LoginComponent implements OnInit {
-  credenciales = { correo: '', contrasena: '' };
+  credenciales = { loginIdentifier: '', contrasena: '' };
   errorMessage: string | null = null;
   isLoading: boolean = false;
   private returnUrl: string = '/productos';
@@ -39,8 +39,8 @@ export class LoginComponent implements OnInit {
     this.errorMessage = null;
     this.isLoading = true;
 
-    if (!this.credenciales.correo?.trim() || !this.credenciales.contrasena) {
-        this.errorMessage = "Correo y contraseña son requeridos.";
+    if (!this.credenciales.loginIdentifier?.trim() || !this.credenciales.contrasena) {
+        this.errorMessage = "Identificador (correo/username) y contraseña son requeridos.";
         this.isLoading = false;
         return;
     }

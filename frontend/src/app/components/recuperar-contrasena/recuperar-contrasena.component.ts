@@ -10,7 +10,7 @@ import { AuthService, AuthResponseSimple } from '../../services/auth.service'; /
   standalone: true,
   imports: [
     CommonModule,
-    FormsModule, // Añadir FormsModule
+    FormsModule, 
     RouterModule
   ],
   templateUrl: './recuperar-contrasena.component.html',
@@ -18,10 +18,11 @@ import { AuthService, AuthResponseSimple } from '../../services/auth.service'; /
 })
 export class RecuperarContrasenaComponent {
   datos = {
-    correo: '',
+    loginIdentifier: '',
     nuevaContrasena: '',
     confirmarNuevaContrasena: ''
   };
+
   errorMessage: string | null = null;
   successMessage: string | null = null;
   isLoading: boolean = false;
@@ -33,15 +34,10 @@ export class RecuperarContrasenaComponent {
     this.successMessage = null;
     this.isLoading = true;
 
-    if (!this.datos.correo?.trim() || !this.datos.nuevaContrasena || !this.datos.confirmarNuevaContrasena) {
+    if (!this.datos.loginIdentifier?.trim() || !this.datos.nuevaContrasena || !this.datos.confirmarNuevaContrasena) {
       this.errorMessage = 'Todos los campos son requeridos.';
       this.isLoading = false;
       return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.datos.correo)) {
-        this.errorMessage = 'Formato de correo inválido.';
-        this.isLoading = false;
-        return;
     }
     if (this.datos.nuevaContrasena.length < 6) {
       this.errorMessage = 'La nueva contraseña debe tener al menos 6 caracteres.';
@@ -54,18 +50,17 @@ export class RecuperarContrasenaComponent {
       return;
     }
 
-    this.authService.recuperarContrasenaSimple({ correo: this.datos.correo, nuevaContrasena: this.datos.nuevaContrasena })
-      .subscribe({
+    this.authService.recuperarContrasenaSimple({ 
+        loginIdentifier: this.datos.loginIdentifier, 
+        nuevaContrasena: this.datos.nuevaContrasena 
+    }).subscribe({
         next: (response: AuthResponseSimple) => {
           this.isLoading = false;
           this.successMessage = response.message;
-          // Limpiar formulario y redirigir o mostrar mensaje para ir a login
-          this.datos = { correo: '', nuevaContrasena: '', confirmarNuevaContrasena: '' };
+          this.datos = { loginIdentifier: '', nuevaContrasena: '', confirmarNuevaContrasena: '' };
           setTimeout(() => {
-            if (this.successMessage) { // Solo si fue exitoso
-                this.router.navigate(['/login']);
-            }
-          }, 3000); // Esperar 3 segundos antes de redirigir
+            if (this.successMessage) { this.router.navigate(['/login']);}
+          }, 3000);
         },
         error: (err) => {
           this.isLoading = false;

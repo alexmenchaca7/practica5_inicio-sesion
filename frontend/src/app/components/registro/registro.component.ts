@@ -21,10 +21,12 @@ export class RegistroComponent {
   datosUsuario = {
     nombre: '',
     apellido: '',
+    username: '', 
     correo: '',
+    telefono: '', 
     contrasena: '',
-    // rol: 'cliente' // El rol se asigna por defecto en el backend en la versión simplificada
   };
+
   errorMessage: string | null = null;
   successMessage: string | null = null;
   isLoading: boolean = false;
@@ -36,11 +38,12 @@ export class RegistroComponent {
     this.successMessage = null;
     this.isLoading = true;
 
-    if (!this.datosUsuario.nombre?.trim() || 
-        !this.datosUsuario.apellido?.trim() || 
-        !this.datosUsuario.correo?.trim() || 
+    if (!this.datosUsuario.nombre?.trim() ||
+        !this.datosUsuario.apellido?.trim() ||
+        !this.datosUsuario.username?.trim() || // Validar username
+        !this.datosUsuario.correo?.trim() ||
         !this.datosUsuario.contrasena) {
-      this.errorMessage = "Todos los campos son requeridos.";
+      this.errorMessage = "Nombre, apellido, nombre de usuario, correo y contraseña son requeridos.";
       this.isLoading = false;
       return;
     }
@@ -49,25 +52,27 @@ export class RegistroComponent {
         this.isLoading = false;
         return;
     }
-    // Podrías añadir una validación de formato de email aquí también en el frontend
+    if (!/^[a-zA-Z0-9_]{3,20}$/.test(this.datosUsuario.username)) {
+        this.errorMessage = 'Nombre de usuario inválido (3-20 caracteres alfanuméricos/guion bajo).';
+        this.isLoading = false;
+        return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.datosUsuario.correo)) {
+        this.errorMessage = 'Formato de correo inválido.';
+        this.isLoading = false;
+        return;
+    }
 
     this.authService.registro(this.datosUsuario).subscribe({
       next: (response: AuthResponseSimple) => {
         this.isLoading = false;
         this.successMessage = response.message + " Ahora puedes iniciar sesión.";
-        console.log('Registro exitoso:', response);
-        // Opcional: Resetear el formulario
-        // this.datosUsuario = { nombre: '', apellido: '', correo: '', contrasena: '' };
-        // Opcional: Redirigir a login después de un delay
         setTimeout(() => {
-          if (!this.errorMessage) { // Solo redirigir si no hubo error posterior
-            this.router.navigate(['/login']);
-          }
+          if (!this.errorMessage) { this.router.navigate(['/login']); }
         }, 2500);
       },
       error: (err) => {
         this.isLoading = false;
-        console.error('Error en registro:', err);
         this.errorMessage = err.message || 'Ocurrió un error durante el registro.';
       }
     });

@@ -9,7 +9,7 @@ import { Usuario } from '../models/usuario';
 export interface AuthResponseSimple { // Interfaz para la respuesta del backend
   message: string;
   usuario?: Usuario;
-  usuarioId?: number; // Para registro
+  usuarioId?: number; 
 }
 
 @Injectable({
@@ -60,19 +60,16 @@ export class AuthService {
     );
   }
 
-  login(credenciales: any): Observable<AuthResponseSimple> {
+  login(credenciales: { loginIdentifier: string, contrasena: string }): Observable<AuthResponseSimple> {
     return this.http.post<AuthResponseSimple>(`${this.apiUrl}/login`, credenciales).pipe(
       tap((response) => {
         if (response.usuario && isPlatformBrowser(this.platformId)) {
           localStorage.setItem(this.usuarioKey, JSON.stringify(response.usuario));
           this.currentUserSubject.next(response.usuario);
-        } else if (!response.usuario) {
-            // Limpiar si el login falló pero no dio error HTTP (ej. backend devuelve 200 pero sin usuario)
-            this.logoutSilently();
-        }
+        } else if (!response.usuario) { this.logoutSilently(); }
       }),
       catchError(err => {
-        this.logoutSilently(); // Limpiar en caso de error de login
+        this.logoutSilently();
         return this.handleError(err);
       })
     );
@@ -90,11 +87,16 @@ export class AuthService {
     this.router.navigate(['/login']);
   }
 
-  recuperarContrasenaSimple(datosRecuperacion: { correo: string, nuevaContrasena: string }): Observable<AuthResponseSimple> { // AuthResponseSimple puede que solo devuelva 'message'
+  recuperarContrasenaSimple(datosRecuperacion: { loginIdentifier: string, nuevaContrasena: string }): Observable<AuthResponseSimple> {
     return this.http.post<AuthResponseSimple>(`${this.apiUrl}/recuperar-simple`, datosRecuperacion).pipe(
-      tap(response => console.log('Respuesta de recuperación simple:', response)),
       catchError(this.handleError)
     );
+  }
+
+  cambiarContrasenaAdmin(idUsuarioAModificar: number, nuevaContrasena: string, credencialesAdmin: any): Observable<any> {
+    const payload = { nuevaContrasena, ...credencialesAdmin };
+    return this.http.put(`${this.apiUrl}/actualizar-contrasena-admin/${idUsuarioAModificar}`, payload)
+      .pipe(catchError(this.handleError));
   }
   
   private handleError(error: HttpErrorResponse) {

@@ -69,10 +69,10 @@ verificarConexionDB(); // Llamar a la función para probar la conexión al inici
 // --- RUTAS DE AUTENTICACIÓN SIMPLIFICADAS ---
 app.post('/api/auth/registro', async (req, res) => {
   console.log('POST /api/auth/registro - Recibido:', req.body);
-  const { nombre, apellido, correo, contrasena } = req.body;
+  const { nombre, apellido, username, correo, telefono, contrasena } = req.body;
 
-  if (!nombre || !apellido || !correo || !contrasena) {
-    return res.status(400).json({ message: 'Todos los campos son requeridos.' });
+  if (!nombre || !apellido || !username || !correo || !contrasena) { // Teléfono es opcional
+    return res.status(400).json({ message: 'Nombre, apellido, nombre de usuario, correo y contraseña son requeridos.' });
   }
   if (contrasena.length < 6) {
       return res.status(400).json({ message: 'La contraseña debe tener al menos 6 caracteres.' });
@@ -80,48 +80,92 @@ app.post('/api/auth/registro', async (req, res) => {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
       return res.status(400).json({ message: 'Formato de correo inválido.' });
   }
+  if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) { // Validación básica para username
+      return res.status(400).json({ message: 'Nombre de usuario inválido (3-20 caracteres alfanuméricos y guion bajo).' });
+  }
+  // Podrías añadir validación para el teléfono si es necesario
 
   try {
-    const [usuariosExistentes] = await pool.query('SELECT id FROM usuarios WHERE correo = ?', [correo]);
+    // Verificar si el correo o username ya existen
+    const [usuariosExistentes] = await pool.query(
+      'SELECT id FROM usuarios WHERE correo = ? OR username = ?',
+      [correo, username]
+    );
     if (usuariosExistentes.length > 0) {
-      return res.status(409).json({ message: 'El correo electrónico ya está registrado.' });
+      // Determinar qué campo está duplicado para un mensaje más específico (opcional)
+      const existingUser = usuariosExistentes[0]; // Asumimos que la query podría devolver más si ambos coinciden con diferentes usuarios
+      const isCorreoDup = existingUser.correo === correo; // Esto es una simplificación, la query ya previene esto si son diferentes usuarios
+      const isUsernameDup = existingUser.username === username; // Simplificación
+      // Mejor: consultar por separado o analizar el resultado de la query combinada
+      const [correoCheck] = await pool.query('SELECT id FROM usuarios WHERE correo = ?', [correo]);
+      if (correoCheck.length > 0) {
+          return res.status(409).json({ message: 'El correo electrónico ya está registrado.' });
+      }
+      const [usernameCheck] = await pool.query('SELECT id FROM usuarios WHERE username = ?', [username]);
+      if (usernameCheck.length > 0) {
+          return res.status(409).json({ message: 'El nombre de usuario ya está en uso.' });
+      }
+      // Si llegamos aquí después de las verificaciones individuales, algo es raro, pero el OR inicial debería haberlo capturado.
+      // Mantenemos un mensaje genérico si la lógica OR es suficiente.
+      // return res.status(409).json({ message: 'El correo electrónico o nombre de usuario ya está registrado.' });
     }
 
     const salt = await bcrypt.genSalt(10);
     const contrasenaHasheada = await bcrypt.hash(contrasena, salt);
 
     const [resultado] = await pool.query(
-      'INSERT INTO usuarios (nombre, apellido, correo, contrasena, rol) VALUES (?, ?, ?, ?, ?)',
-      [nombre, apellido, correo, contrasenaHasheada, 'cliente']
+      'INSERT INTO usuarios (nombre, apellido, username, correo, telefono, contrasena, rol) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [nombre, apellido, username, correo, telefono || null, contrasenaHasheada, 'cliente'] // telefono puede ser null
     );
 
     res.status(201).json({ message: 'Usuario registrado exitosamente.', usuarioId: resultado.insertId });
   } catch (error) {
     console.error('Error en /api/auth/registro:', error);
+    if (error.code === 'ER_DUP_ENTRY') { // Código de error de MySQL para entradas duplicadas
+        if (error.message.includes('correo')) {
+            return res.status(409).json({ message: 'El correo electrónico ya está registrado.' });
+        } else if (error.message.includes('username')) {
+            return res.status(409).json({ message: 'El nombre de usuario ya está en uso.' });
+        }
+    }
     res.status(500).json({ message: 'Error interno del servidor al registrar.' });
   }
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  console.log('POST /api/auth/login - Recibido:', req.body);
-  const { correo, contrasena } = req.body;
+  console.log('----------------------------------------------------');
+  console.log('BACKEND: INICIO RUTA POST /api/auth/login');
+  console.log('BACKEND: req.headers["content-type"]:', req.headers['content-type']); // Para ver si es application/json
+  console.log('BACKEND: Cuerpo de la petición (req.body) ANTES de desestructurar:', JSON.stringify(req.body, null, 2));
+  console.log('----------------------------------------------------');
 
-  if (!correo || !contrasena) {
-    return res.status(400).json({ message: 'Correo y contraseña son requeridos.' });
+  const { loginIdentifier, contrasena } = req.body;
+
+  // Loguear los valores después de desestructurar
+  console.log('BACKEND: loginIdentifier extraído:', loginIdentifier);
+  console.log('BACKEND: contrasena extraída:', contrasena);
+
+  if (!loginIdentifier || !contrasena) {
+    console.log('BACKEND: Validación falló - loginIdentifier o contrasena están vacíos/undefined.');
+    return res.status(400).json({ message: 'Identificador de inicio de sesión y contraseña son requeridos.' });
   }
 
   try {
-    const [usuarios] = await pool.query('SELECT id, nombre, apellido, correo, contrasena, rol FROM usuarios WHERE correo = ?', [correo]);
+    // Intentar encontrar al usuario por correo O por username
+    const [usuarios] = await pool.query(
+      'SELECT id, nombre, apellido, username, correo, telefono, contrasena, rol FROM usuarios WHERE correo = ? OR username = ?',
+      [loginIdentifier, loginIdentifier]
+    );
 
     if (usuarios.length === 0) {
-      return res.status(401).json({ message: 'Credenciales inválidas (usuario no encontrado).' });
+      return res.status(401).json({ message: 'Credenciales inválidas.' });
     }
 
     const usuario = usuarios[0];
     const esContrasenaValida = await bcrypt.compare(contrasena, usuario.contrasena);
 
     if (!esContrasenaValida) {
-      return res.status(401).json({ message: 'Credenciales inválidas (contraseña incorrecta).' });
+      return res.status(401).json({ message: 'Credenciales inválidas.' });
     }
 
     const { contrasena: _, ...usuarioParaEnviar } = usuario;
@@ -135,40 +179,43 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// NUEVO ENDPOINT PARA RECUPERACIÓN SIMPLE (ya lo tenías, solo asegurando que esté)
 app.post('/api/auth/recuperar-simple', async (req, res) => {
   console.log('POST /api/auth/recuperar-simple - Recibido:', req.body);
-  const { correo, nuevaContrasena } = req.body;
+  // Permitir recuperación por correo o username
+  const { loginIdentifier, nuevaContrasena } = req.body;
 
-  if (!correo || !nuevaContrasena) {
-    return res.status(400).json({ message: 'Correo y nueva contraseña son requeridos.' });
+  if (!loginIdentifier || !nuevaContrasena) {
+    return res.status(400).json({ message: 'Identificador (correo/username) y nueva contraseña son requeridos.' });
   }
   if (nuevaContrasena.length < 6) {
     return res.status(400).json({ message: 'La nueva contraseña debe tener al menos 6 caracteres.' });
   }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
-      return res.status(400).json({ message: 'Formato de correo inválido.' });
-  }
 
   try {
-    const [usuarios] = await pool.query('SELECT id FROM usuarios WHERE correo = ?', [correo]);
+    const [usuarios] = await pool.query(
+        'SELECT id FROM usuarios WHERE correo = ? OR username = ?',
+        [loginIdentifier, loginIdentifier]
+    );
+
     if (usuarios.length === 0) {
-      return res.status(404).json({ message: 'El correo electrónico no se encuentra registrado.' });
+      return res.status(404).json({ message: 'El correo electrónico o nombre de usuario no se encuentra registrado.' });
     }
+
+    const usuarioId = usuarios[0].id; // Tomar el ID del primer usuario encontrado
 
     const salt = await bcrypt.genSalt(10);
     const contrasenaHasheada = await bcrypt.hash(nuevaContrasena, salt);
 
     const [resultadoUpdate] = await pool.query(
-      'UPDATE usuarios SET contrasena = ? WHERE correo = ?',
-      [contrasenaHasheada, correo]
+      'UPDATE usuarios SET contrasena = ? WHERE id = ?', // Actualizar por ID es más seguro
+      [contrasenaHasheada, usuarioId]
     );
 
     if (resultadoUpdate.affectedRows > 0) {
-      console.log('Contraseña actualizada exitosamente para el correo:', correo);
+      console.log('Contraseña actualizada exitosamente para el usuario ID:', usuarioId);
       res.status(200).json({ message: 'Contraseña actualizada exitosamente. Ya puedes iniciar sesión con tu nueva contraseña.' });
     } else {
-      console.error('Error inesperado: Usuario encontrado pero no se pudo actualizar la contraseña para:', correo);
+      console.error('Error inesperado: Usuario encontrado pero no se pudo actualizar la contraseña para ID:', usuarioId);
       res.status(500).json({ message: 'Error al actualizar la contraseña.' });
     }
   } catch (error) {
