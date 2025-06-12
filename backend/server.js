@@ -315,18 +315,17 @@ app.delete('/api/files/:filename', (req, res) => {
   });
 });
 
-app.get('/api/productos', (req, res) => {
-  const query = 'SELECT * FROM productos WHERE stock > 0';
-
-  db.query(query, (err, results) => {
-    if (err) {
-      console.error('Error al obtener los productos:', err);
-      res.status(500).send('Error al obtener los productos');
-    } else {
-      res.json(results);
-    }
-  });
+app.get('/api/productos', async (req, res) => {
+  console.log('GET /api/productos - Obteniendo productos en stock.');
+  try {
+    const [productos] = await pool.query('SELECT * FROM productos WHERE cantidad > 0');
+    res.json(productos);
+  } catch (err) {
+    console.error('Error al obtener los productos desde /api/productos:', err);
+    res.status(500).json({ message: 'Error en el servidor al obtener productos.' });
+  }
 });
+
 
 // NUEVA RUTA DE STOCK
 app.patch('/api/productos/:id/stock', async (req, res) => {
@@ -437,15 +436,15 @@ app.delete('/api/productos/:id', async (req, res) => {
 });
 
 // Rutas para el inventario (ahora protegida)
-app.get('/api/inventario', (req, res) => { 
-  const query = 'SELECT * FROM productos';
-  db.query(query, (err, results) => {
-    if (err) {
-      res.status(500).send('Error al obtener el inventario');
-    } else {
-      res.json(results);
-    }
-  });
+app.get('/api/inventario', async (req, res) => { 
+  console.log('GET /api/inventario - Obteniendo todo el inventario.');
+  try {
+    const [inventario] = await pool.query('SELECT * FROM productos');
+    res.json(inventario);
+  } catch (err) {
+    console.error('Error al obtener el inventario desde /api/inventario:', err);
+    res.status(500).json({ message: 'Error en el servidor al obtener el inventario.' });
+  }
 });
 
 // Obtener el carrito de un usuario
