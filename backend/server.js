@@ -1,10 +1,10 @@
 const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
-const path = require('path'); // Necesario para path.join
-const fs = require('fs'); // Necesario para manejo de archivos
+const path = require('path');
+const fs = require('fs');
 const multer = require('multer');
-const bcrypt = require('bcryptjs'); // Para hashear contraseñas
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const port = 8080;
@@ -12,57 +12,56 @@ const port = 8080;
 // --- Configuración de Multer ---
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+    fs.mkdirSync(uploadsDir, { recursive: true });
 }
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
+    destination: function (req, file, cb) {
+        cb(null, uploadsDir);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    }
 });
 const upload = multer({ storage: storage });
-// --- Fin Configuración de Multer ---
 
-// --- Configuración de CORS Detallada ---
+// --- INICIO DE LA CORRECCIÓN DE CORS ---
 const corsOptions = {
-  origin: 'http://localhost:4200', // Puerto de tu frontend Angular
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  optionsSuccessStatus: 200
+    origin: 'http://localhost:4200',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'], // 'PATCH' AÑADIDO
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id'], // 'x-user-id' AÑADIDO
+    credentials: true,
+    optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
+// --- FIN DE LA CORRECCIÓN DE CORS ---
 
 app.use(express.json());
 app.use('/uploads', express.static(uploadsDir));
 
-// --- Conexión a Base de Datos (usando promesas y pool) ---
+// --- Conexión a Base de Datos ---
 const dbConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: 'root',
-  database: 'ecommerce',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+    host: 'localhost',
+    user: 'root',
+    password: 'root',
+    database: 'ecommerce',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 };
 const pool = mysql.createPool(dbConfig);
 
-// (Opcional pero recomendado) Verificar conexión al inicio con una query de prueba
 async function verificarConexionDB() {
-  try {
-    const connection = await pool.getConnection(); // Obtener una conexión del pool
-    console.log('Conectado exitosamente a la base de datos MySQL (pool).');
-    connection.release(); // Liberar la conexión de vuelta al pool
-  } catch (error) {
-    console.error('Error CRÍTICO al conectar con la base de datos MySQL (pool):', error.message || error);
-    process.exit(1); // Salir si no se puede conectar
-  }
+    try {
+        const connection = await pool.getConnection();
+        console.log('Conectado exitosamente a la base de datos MySQL (pool).');
+        connection.release();
+    } catch (error) {
+        console.error('Error CRÍTICO al conectar con la base de datos MySQL (pool):', error.message || error);
+        process.exit(1);
+    }
 }
-verificarConexionDB(); // Llamar a la función para probar la conexión al inicio
+verificarConexionDB();
 
 // --- RUTAS API ---  //
 
@@ -283,16 +282,48 @@ app.delete('/api/files/:filename', (req, res) => {
 });
 
 app.get('/api/productos', async (req, res) => {
-  console.log('GET /api/productos - Solicitud recibida');
-  try {
-    const [results] = await pool.query('SELECT * FROM productos');
-    console.log(`GET /api/productos - Enviando ${results.length} productos.`);
-    res.json(results);
-  } catch (err) {
-    console.error('GET /api/productos - Error en DB:', err);
-    res.status(500).json({ message: 'Error al obtener productos', error: err.message });
-  }
+    try {
+        const [results] = await pool.query('SELECT * FROM productos');
+        res.json(results);
+    } catch (err) {
+        res.status(500).json({ message: 'Error al obtener productos', error: err.message });
+    }
 });
+
+// NUEVA RUTA DE STOCK
+app.patch('/api/productos/:id/stock', async (req, res) => {
+    const { id } = req.params;
+    const { cantidadAfectada, operacion } = req.body; // operacion: 'sumar' o 'restar'
+
+    if (typeof cantidadAfectada !== 'number' || !['sumar', 'restar'].includes(operacion)) {
+        return res.status(400).json({ message: 'Se requiere una cantidad y una operación (sumar/restar) válidas.' });
+    }
+
+    const operator = operacion === 'restar' ? '-' : '+';
+    const query = `UPDATE productos SET cantidad = cantidad ${operator} ? WHERE id = ?`;
+
+    try {
+        if (operacion === 'restar') {
+            const [productos] = await pool.query('SELECT cantidad FROM productos WHERE id = ?', [id]);
+            if (productos.length === 0) {
+                return res.status(404).json({ message: 'Producto no encontrado.' });
+            }
+            if (productos[0].cantidad < cantidadAfectada) {
+                return res.status(409).json({ message: 'No hay suficiente stock disponible.' });
+            }
+        }
+
+        const [result] = await pool.query(query, [cantidadAfectada, id]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Producto no encontrado para actualizar stock.' });
+        }
+        res.json({ message: 'Stock actualizado correctamente.' });
+    } catch (error) {
+        console.error(`Error al actualizar stock para producto ${id}:`, error);
+        res.status(500).json({ message: 'Error interno al actualizar el stock.' });
+    }
+});
+
 
 app.get('/api/productos/:id', async (req, res) => {
   const { id } = req.params;
@@ -366,6 +397,117 @@ app.delete('/api/productos/:id', async (req, res) => {
     res.status(500).json({ message: 'Error al eliminar producto', error: err.message });
   }
 });
+
+// --- Middleware de autenticación ---
+function requireAuth(req, res, next) {
+    const userId = req.headers['x-user-id'];
+    if (!userId) {
+        return res.status(401).json({ message: 'Autenticación requerida' });
+    }
+    req.userId = parseInt(userId);
+    next();
+}
+
+// Obtener el carrito de un usuario
+app.get('/api/carrito', requireAuth, async (req, res) => {
+    try {
+        const [carrito] = await pool.query(
+            'SELECT c.id as carritoId, c.cantidad as cantidadEnCarrito, p.id as producto_id, p.nombre, p.precio, p.imagen, p.cantidad as stock ' +
+            'FROM carrito c ' +
+            'JOIN productos p ON c.producto_id = p.id ' +
+            'WHERE c.usuario_id = ?',
+            [req.userId]
+        );
+        res.json(carrito);
+    } catch (error) {
+        console.error('Error al obtener carrito:', error);
+        res.status(500).json({ message: 'Error al obtener carrito' });
+    }
+});
+
+// Agregar un producto al carrito (usado por agregarProducto en el servicio)
+app.post('/api/carrito', requireAuth, async (req, res) => {
+    const { producto_id, cantidad } = req.body;
+    if (!producto_id || cantidad === undefined) {
+        return res.status(400).json({ message: 'producto_id y cantidad son requeridos' });
+    }
+
+    try {
+        const [existing] = await pool.query(
+            'SELECT id, cantidad FROM carrito WHERE usuario_id = ? AND producto_id = ?',
+            [req.userId, producto_id]
+        );
+
+        if (existing.length > 0) {
+            const newQuantity = existing[0].cantidad + cantidad;
+            await pool.query('UPDATE carrito SET cantidad = ? WHERE id = ?', [newQuantity, existing[0].id]);
+            res.json({ message: 'Cantidad actualizada en el carrito' });
+        } else {
+            await pool.query('INSERT INTO carrito (usuario_id, producto_id, cantidad) VALUES (?, ?, ?)', [req.userId, producto_id, cantidad]);
+            res.status(201).json({ message: 'Producto agregado al carrito' });
+        }
+    } catch (error) {
+        console.error('Error al agregar al carrito:', error);
+        res.status(500).json({ message: 'Error al agregar producto al carrito' });
+    }
+});
+
+// Actualizar cantidad y stock (usado por actualizarCantidad en el servicio)
+app.put('/api/carrito/actualizar-cantidad', requireAuth, async (req, res) => {
+    const { carritoId, nuevaCantidad } = req.body;
+    const usuario_id = req.userId;
+
+    if (!carritoId || nuevaCantidad === undefined || nuevaCantidad < 1) {
+        return res.status(400).json({ message: 'Se requieren el ID del ítem y una nueva cantidad válida.' });
+    }
+
+    try {
+        const [result] = await pool.query(
+            'UPDATE carrito SET cantidad = ? WHERE id = ? AND usuario_id = ?',
+            [nuevaCantidad, carritoId, usuario_id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Ítem del carrito no encontrado o no pertenece al usuario.' });
+        }
+
+        res.json({ message: 'Cantidad del carrito actualizada.' });
+
+    } catch (error) {
+        console.error('Error al actualizar la cantidad del carrito:', error);
+        res.status(500).json({ message: 'Error en el servidor al actualizar la cantidad.' });
+    }
+});
+
+
+// Eliminar un producto del carrito (OJO: esta ruta puede ser necesaria para el futuro)
+app.delete('/api/carrito/:id', requireAuth, async (req, res) => {
+    const carritoId = req.params.id;
+    try {
+        const [result] = await pool.query('DELETE FROM carrito WHERE id = ? AND usuario_id = ?', [carritoId, req.userId]);
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Ítem no encontrado en el carrito' });
+        }
+        res.json({ message: 'Producto eliminado del carrito' });
+    } catch (error) {
+        console.error('Error al eliminar del carrito:', error);
+        res.status(500).json({ message: 'Error al eliminar producto del carrito' });
+    }
+});
+
+app.delete('/api/carrito', requireAuth, async (req, res) => {
+  try {
+    await pool.query(
+      'DELETE FROM carrito WHERE usuario_id = ?',
+      [req.userId]
+    );
+    res.json({ message: 'Carrito vaciado' });
+  } catch (error) {
+    console.error('Error al vaciar carrito:', error);
+    res.status(500).json({ message: 'Error al vaciar carrito' });
+  }
+});
+
 
 // Manejador para rutas no encontradas (404)
 app.use((req, res, next) => {

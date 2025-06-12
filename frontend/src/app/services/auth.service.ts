@@ -64,6 +64,10 @@ export class AuthService {
     return this.http.post<AuthResponseSimple>(`${this.apiUrl}/login`, credenciales).pipe(
       tap((response) => {
         if (response.usuario && isPlatformBrowser(this.platformId)) {
+          // Asegurar que el usuario tenga ID
+          if (!response.usuario.id) {
+            throw new Error('Usuario sin ID en la respuesta');
+          }
           localStorage.setItem(this.usuarioKey, JSON.stringify(response.usuario));
           this.currentUserSubject.next(response.usuario);
         } else if (!response.usuario) { this.logoutSilently(); }

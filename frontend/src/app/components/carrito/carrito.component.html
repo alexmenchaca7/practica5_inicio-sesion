@@ -12,18 +12,17 @@
   <div class="carrito-contenido" *ngIf="carrito.length > 0 && !mostrarModalConfirmacion">
     <ul class="carrito-lista">
       <li class="carrito-item" *ngFor="let producto of carrito; let i = index">
-        <div class="producto-info">
-          <span class="producto-nombre">{{ producto.nombre }}</span>
-          <span class="producto-precio">{{ producto.precio | currency:'MXN':'symbol':'1.2-2' }}</span> 
-          <span class="producto-cantidad">
-            Cantidad:
-            <input type="number" 
-                   [ngModel]="producto.cantidad" 
-                   (ngModelChange)="actualizarCantidad(i, $event)" 
-                   min="1" /> 
-          </span>
-        </div>
-        <button class="eliminar-button" (click)="eliminarProducto(i)">Eliminar</button>
+          <div class="producto-info">
+            <span class="producto-nombre">{{ producto.nombre }}</span>
+            <span class="producto-precio">{{ producto.precio | currency:'MXN':'symbol':'1.2-2' }}</span> 
+            <span class="producto-cantidad">
+              Cantidad:
+              <input type="number" 
+                    [ngModel]="producto.cantidadEnCarrito"  (ngModelChange)="actualizarCantidad(producto.carritoId, $event)" 
+                    min="1" /> 
+            </span>
+          </div>
+          <button class="eliminar-button" (click)="eliminarProducto(producto.carritoId)">Eliminar</button>
       </li>
     </ul>
 
