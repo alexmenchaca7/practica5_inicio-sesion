@@ -42,6 +42,10 @@ export class AuthService {
     this.currentUser$ = this.currentUserSubject.asObservable();
   }
 
+  getToken(): string | null {
+    return localStorage.getItem('token');
+  }
+
   public get currentUserValue(): Usuario | null {
     return this.currentUserSubject.value;
   }

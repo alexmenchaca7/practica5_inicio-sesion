@@ -63,6 +63,40 @@ async function verificarConexionDB() {
 }
 verificarConexionDB();
 
+// Middleware para verificar el token y el rol de administrador
+function verifyAdmin(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).send('Acceso denegado. No se proporcionó token.');
+  }
+
+  const token = authHeader.split(' ')[1];
+  if (!token) {
+    return res.status(401).send('Acceso denegado. Token malformado.');
+  }
+
+  try {
+    const decoded = jwt.verify(token, 'secret_key');
+    if (decoded.role !== 'admin') {
+      return res.status(403).send('Acceso prohibido. Se requiere rol de administrador.');
+    }
+    req.user = decoded;
+    next();
+  } catch (err) {
+    res.status(400).send('Token inválido.');
+  }
+}
+
+// --- Middleware de autenticación ---
+function requireAuth(req, res, next) {
+    const userId = req.headers['x-user-id'];
+    if (!userId) {
+        return res.status(401).json({ message: 'Autenticación requerida' });
+    }
+    req.userId = parseInt(userId);
+    next();
+}
+
 // --- RUTAS API ---  //
 
 // --- RUTAS DE AUTENTICACIÓN SIMPLIFICADAS ---
@@ -281,13 +315,17 @@ app.delete('/api/files/:filename', (req, res) => {
   });
 });
 
-app.get('/api/productos', async (req, res) => {
-    try {
-        const [results] = await pool.query('SELECT * FROM productos');
-        res.json(results);
-    } catch (err) {
-        res.status(500).json({ message: 'Error al obtener productos', error: err.message });
+app.get('/api/productos', (req, res) => {
+  const query = 'SELECT * FROM productos WHERE stock > 0';
+
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error('Error al obtener los productos:', err);
+      res.status(500).send('Error al obtener los productos');
+    } else {
+      res.json(results);
     }
+  });
 });
 
 // NUEVA RUTA DE STOCK
@@ -398,15 +436,17 @@ app.delete('/api/productos/:id', async (req, res) => {
   }
 });
 
-// --- Middleware de autenticación ---
-function requireAuth(req, res, next) {
-    const userId = req.headers['x-user-id'];
-    if (!userId) {
-        return res.status(401).json({ message: 'Autenticación requerida' });
+// Rutas para el inventario (ahora protegida)
+app.get('/api/inventario', (req, res) => { 
+  const query = 'SELECT * FROM productos';
+  db.query(query, (err, results) => {
+    if (err) {
+      res.status(500).send('Error al obtener el inventario');
+    } else {
+      res.json(results);
     }
-    req.userId = parseInt(userId);
-    next();
-}
+  });
+});
 
 // Obtener el carrito de un usuario
 app.get('/api/carrito', requireAuth, async (req, res) => {
