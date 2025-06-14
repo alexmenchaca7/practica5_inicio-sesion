@@ -62,6 +62,11 @@ export class RegistroComponent {
         this.isLoading = false;
         return;
     }
+    if (!this.isPasswordValid(this.datosUsuario.contrasena)) {
+        this.errorMessage = "La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número.";
+        this.isLoading = false;
+        return;
+    }
 
     this.authService.registro(this.datosUsuario).subscribe({
       next: (response: AuthResponseSimple) => {
@@ -76,5 +81,13 @@ export class RegistroComponent {
         this.errorMessage = err.message || 'Ocurrió un error durante el registro.';
       }
     });
+  }
+
+  isPasswordValid(password: string): boolean {
+    if (password.length < 8) return false;
+    if (!/[A-Z]/.test(password)) return false;
+    if (!/[a-z]/.test(password)) return false;
+    if (!/[0-9]/.test(password)) return false;
+    return true;
   }
 }

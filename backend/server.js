@@ -5,6 +5,8 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = 'secreto_super_seguro'; // Cambiar en producción
 
 const app = express();
 const port = 8080;
@@ -63,39 +65,31 @@ async function verificarConexionDB() {
 }
 verificarConexionDB();
 
-// Middleware para verificar el token y el rol de administrador
-function verifyAdmin(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) {
-    return res.status(401).send('Acceso denegado. No se proporcionó token.');
-  }
-
-  const token = authHeader.split(' ')[1];
-  if (!token) {
-    return res.status(401).send('Acceso denegado. Token malformado.');
-  }
-
-  try {
-    const decoded = jwt.verify(token, 'secret_key');
-    if (decoded.role !== 'admin') {
-      return res.status(403).send('Acceso prohibido. Se requiere rol de administrador.');
-    }
-    req.user = decoded;
-    next();
-  } catch (err) {
-    res.status(400).send('Token inválido.');
-  }
+// Función de validación de contraseña
+function validarContrasena(contrasena) {
+    if (contrasena.length < 8) return false;
+    if (!/[A-Z]/.test(contrasena)) return false;
+    if (!/[a-z]/.test(contrasena)) return false;
+    if (!/[0-9]/.test(contrasena)) return false;
+    return true;
 }
 
 // --- Middleware de autenticación ---
 function requireAuth(req, res, next) {
-    const userId = req.headers['x-user-id'];
-    if (!userId) {
-        return res.status(401).json({ message: 'Autenticación requerida' });
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+        return res.status(401).json({ message: 'Token no proporcionado' });
     }
-    req.userId = parseInt(userId);
-    next();
+    
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.userId = decoded.userId;
+        next();
+    } catch (err) {
+        res.status(401).json({ message: 'Token inválido o expirado' });
+    }
 }
+
 
 // --- RUTAS API ---  //
 
@@ -103,7 +97,7 @@ function requireAuth(req, res, next) {
 app.post('/api/auth/registro', async (req, res) => {
   console.log('POST /api/auth/registro - Recibido:', req.body);
   const { nombre, apellido, username, correo, telefono, contrasena } = req.body;
-
+  
   if (!nombre || !apellido || !username || !correo || !contrasena) { // Teléfono es opcional
     return res.status(400).json({ message: 'Nombre, apellido, nombre de usuario, correo y contraseña son requeridos.' });
   }
@@ -116,7 +110,9 @@ app.post('/api/auth/registro', async (req, res) => {
   if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) { // Validación básica para username
       return res.status(400).json({ message: 'Nombre de usuario inválido (3-20 caracteres alfanuméricos y guion bajo).' });
   }
-  // Podrías añadir validación para el teléfono si es necesario
+  if (!validarContrasena(contrasena)) {
+        return res.status(400).json({ message: 'La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número.' });
+  }
 
   try {
     // Verificar si el correo o username ya existen
@@ -166,55 +162,72 @@ app.post('/api/auth/registro', async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  console.log('----------------------------------------------------');
-  console.log('BACKEND RUTA: /api/auth/login INVOCADA');
-  console.log('BACKEND req.method:', req.method);
-  console.log('BACKEND req.originalUrl:', req.originalUrl);
-  console.log('BACKEND req.headers["content-type"]:', req.headers['content-type']);
-  console.log('BACKEND req.body (ANTES de desestructurar):', req.body); // Este es el más importante
-  console.log('----------------------------------------------------');
 
   const { loginIdentifier, contrasena } = req.body; // Intento de desestructurar
-
-  // Loguear los valores DESPUÉS de desestructurar
-  console.log('BACKEND loginIdentifier (DESPUÉS de desestructurar):', loginIdentifier);
-  console.log('BACKEND contrasena (DESPUÉS de desestructurar):', contrasena);
 
   if (!loginIdentifier || !contrasena) {
     console.log('BACKEND VALIDACIÓN FALLÓ: loginIdentifier o contrasena es falsy.');
     return res.status(400).json({ message: 'Identificador de inicio de sesión y contraseña son requeridos.' });
   }
 
-  console.log('BACKEND VALIDACIÓN PASÓ: Intentando procesar login...');
-
   try {
     // Intentar encontrar al usuario por correo O por username
     const [usuarios] = await pool.query(
-      'SELECT id, nombre, apellido, username, correo, telefono, contrasena, rol FROM usuarios WHERE correo = ? OR username = ?',
-      [loginIdentifier, loginIdentifier]
+            'SELECT * FROM usuarios WHERE correo = ? OR username = ?',
+            [loginIdentifier, loginIdentifier]
     );
 
     if (usuarios.length === 0) {
-      console.log('BACKEND LOGIN: Usuario no encontrado con el identificador:', loginIdentifier);
-      return res.status(401).json({ message: 'Credenciales inválidas.' });
+        return res.status(401).json({ message: 'Credenciales inválidas.' });
     }
 
     const usuario = usuarios[0];
-    console.log('BACKEND LOGIN: Usuario encontrado:', usuario.correo, usuario.username);
+
+    // Verificar si la cuenta está bloqueada
+    if (usuario.bloqueado_hasta && new Date(usuario.bloqueado_hasta) > new Date()) {
+        return res.status(403).json({ 
+            message: `Cuenta bloqueada. Intente nuevamente después de ${usuario.bloqueado_hasta}`
+        });
+    }
+
     const esContrasenaValida = await bcrypt.compare(contrasena, usuario.contrasena);
 
     if (!esContrasenaValida) {
-      console.log('BACKEND LOGIN: Contraseña incorrecta para:', loginIdentifier);
-      return res.status(401).json({ message: 'Credenciales inválidas.' });
+        // Incrementar intentos fallidos
+        const nuevosIntentos = usuario.intentos_fallidos + 1;
+        let bloqueadoHasta = null;
+        
+        if (nuevosIntentos >= 5) {
+            bloqueadoHasta = new Date(Date.now() + 15 * 60000); // Bloquear por 15 minutos
+        }
+        
+        await pool.query(
+            'UPDATE usuarios SET intentos_fallidos = ?, bloqueado_hasta = ? WHERE id = ?',
+            [nuevosIntentos, bloqueadoHasta, usuario.id]
+        );
+        
+        return res.status(401).json({ message: 'Credenciales inválidas.' });
     }
+    
+    // Restablecer intentos al iniciar sesión correctamente
+    await pool.query(
+        'UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL WHERE id = ?',
+        [usuario.id]
+    );
 
-    console.log('BACKEND LOGIN: Login exitoso para:', loginIdentifier);
     const { contrasena: _, ...usuarioParaEnviar } = usuario;
-    res.json({
-      message: 'Inicio de sesión exitoso.',
-      usuario: usuarioParaEnviar
-    });
 
+    const token = jwt.sign(
+        { userId: usuario.id, rol: usuario.rol },
+        JWT_SECRET,
+        { expiresIn: '20m' } // Expira en 20 minutos
+    );
+    
+    res.json({
+        message: 'Inicio de sesión exitoso.',
+        token,
+        usuario: usuarioParaEnviar
+    });
   } catch (error) {
     console.error('BACKEND LOGIN: Error en el bloque try-catch:', error);
     res.status(500).json({ message: 'Error interno del servidor durante el login.' });
@@ -229,8 +242,8 @@ app.post('/api/auth/recuperar-simple', async (req, res) => {
   if (!loginIdentifier || !nuevaContrasena) {
     return res.status(400).json({ message: 'Identificador (correo/username) y nueva contraseña son requeridos.' });
   }
-  if (nuevaContrasena.length < 6) {
-    return res.status(400).json({ message: 'La nueva contraseña debe tener al menos 6 caracteres.' });
+  if (!validarContrasena(nuevaContrasena)) {
+        return res.status(400).json({ message: 'La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número.' });
   }
 
   try {
@@ -286,6 +299,22 @@ app.put('/api/auth/actualizar-contrasena-admin/:idUsuarioAModificar', async (req
         console.error('Error actualizando contraseña admin:', error);
         res.status(500).json({ message: 'Error actualizando contraseña.' });
     }
+});
+
+app.post('/api/auth/solicitar-recuperacion', async (req, res) => {
+    const { loginIdentifier } = req.body;
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiracion = new Date(Date.now() + 30 * 60000); // 30 minutos
+    
+    // ... buscar usuario ...
+    await pool.query(
+        'INSERT INTO tokens_recuperacion (usuario_id, token, expiracion) VALUES (?, ?, ?)',
+        [usuario.id, token, expiracion]
+    );
+    
+    // Enviar correo con enlace (pseudocódigo)
+    enviarCorreo(usuario.correo, `${BASE_URL}/recuperar?token=${token}`);
+    res.json({ message: 'Enlace de recuperación enviado' });
 });
 
 

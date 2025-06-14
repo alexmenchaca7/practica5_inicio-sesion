@@ -91,9 +91,13 @@ export class AuthService {
   }
 
   logout(): void {
-    this.logoutSilently();
+    localStorage.removeItem(this.usuarioKey);
+    this.currentUserSubject.next(null);
+    // Eliminar cookie de sesión
+    document.cookie = 'session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
     this.router.navigate(['/login']);
   }
+
 
   recuperarContrasenaSimple(datosRecuperacion: { loginIdentifier: string, nuevaContrasena: string }): Observable<AuthResponseSimple> {
     return this.http.post<AuthResponseSimple>(`${this.apiUrl}/recuperar-simple`, datosRecuperacion).pipe(

@@ -67,13 +67,23 @@
 
     <!-- Contraseña -->
     <div class="form-group">
-      <label for="registro-contrasena">Contraseña:</label>
-      <input type="password" id="registro-contrasena" [(ngModel)]="datosUsuario.contrasena" name="contrasena" required minlength="6" #contrasenaRegInput="ngModel"
-             [ngClass]="{'input-error': contrasenaRegInput.invalid && (contrasenaRegInput.dirty || contrasenaRegInput.touched)}">
-      <div *ngIf="contrasenaRegInput.invalid && (contrasenaRegInput.dirty || contrasenaRegInput.touched)" class="validation-error">
-        <small *ngIf="contrasenaRegInput.errors?.['required']">La contraseña es requerida.</small>
-        <small *ngIf="contrasenaRegInput.errors?.['minlength']">La contraseña debe tener al menos 6 caracteres.</small>
-      </div>
+        <label for="registro-contrasena">Contraseña:</label>
+        <input type="password" id="registro-contrasena" 
+              [(ngModel)]="datosUsuario.contrasena" 
+              name="contrasena" required minlength="8"
+              #contrasenaRegInput="ngModel"
+              [ngClass]="{'input-error': contrasenaRegInput.invalid && (contrasenaRegInput.dirty || contrasenaRegInput.touched)}">
+        <div *ngIf="contrasenaRegInput.invalid && (contrasenaRegInput.dirty || contrasenaRegInput.touched)" class="validation-error">
+            <small *ngIf="contrasenaRegInput.errors?.['required']">La contraseña es requerida.</small>
+            <small *ngIf="contrasenaRegInput.errors?.['minlength']">Mínimo 8 caracteres.</small>
+        </div>
+        <div class="password-requirements">
+            <small>Debe contener al menos:</small>
+            <small>• 8 caracteres</small>
+            <small>• 1 letra mayúscula</small>
+            <small>• 1 letra minúscula</small>
+            <small>• 1 número</small>
+        </div>
     </div>
 
     <button type="submit" [disabled]="registroForm.invalid || isLoading" class="auth-button">

@@ -1,5 +1,5 @@
 {
-  "name": "practica5_inicio-sesion",
+  "name": "capi_caps",
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
@@ -7,7 +7,7 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "serve:ssr:practica5_inicio-sesion": "node dist/practica5_inicio-sesion/server/server.mjs"
+    "serve:ssr:capi_caps": "node dist/capi_caps/server/server.mjs"
   },
   "private": true,
   "dependencies": {

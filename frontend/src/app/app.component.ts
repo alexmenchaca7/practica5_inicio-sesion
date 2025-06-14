@@ -9,5 +9,5 @@ import { RouterModule } from '@angular/router';
 })
 
 export class AppComponent {
-  title = 'practica5_inicio-sesion';
+  title = 'capi_caps';
 }

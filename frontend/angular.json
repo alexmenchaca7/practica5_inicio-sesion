@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "practica5_inicio-sesion": {
+    "capi_caps": {
       "projectType": "application",
       "schematics": {},
       "root": "",
@@ -13,7 +13,7 @@
         "build": {
           "builder": "@angular-devkit/build-angular:application",
           "options": {
-            "outputPath": "dist/practica5_inicio-sesion",
+            "outputPath": "dist/capi_caps",
             "index": "src/index.html",
             "browser": "src/main.ts",
             "polyfills": [
@@ -65,10 +65,10 @@
           "builder": "@angular-devkit/build-angular:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "practica5_inicio-sesion:build:production"
+              "buildTarget": "capi_caps:build:production"
             },
             "development": {
-              "buildTarget": "practica5_inicio-sesion:build:development"
+              "buildTarget": "capi_caps:build:development"
             }
           },
           "defaultConfiguration": "development"
