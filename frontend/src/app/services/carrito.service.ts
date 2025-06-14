@@ -15,7 +15,7 @@ import { AuthService } from './auth.service';
 export class CarritoService {
   private carritoSubject = new BehaviorSubject<CarritoItem[]>([]);
   public carrito$ = this.carritoSubject.asObservable();
-  public tiendaNombre = 'c';
+  public tiendaNombre = 'CapiCaps';
   private readonly API_URL = 'http://localhost:8080/api';
   public readonly serverBaseUrl: string;
 

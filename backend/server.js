@@ -5,8 +5,6 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const JWT_SECRET = 'secreto_super_seguro'; // Cambiar en producción
 
 const app = express();
 const port = 8080;
@@ -76,18 +74,13 @@ function validarContrasena(contrasena) {
 
 // --- Middleware de autenticación ---
 function requireAuth(req, res, next) {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-        return res.status(401).json({ message: 'Token no proporcionado' });
+    const userId = req.headers['x-user-id'];
+    if (!userId) {
+        return res.status(401).json({ message: 'Autenticación requerida' });
     }
     
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        req.userId = decoded.userId;
-        next();
-    } catch (err) {
-        res.status(401).json({ message: 'Token inválido o expirado' });
-    }
+    req.userId = parseInt(userId);
+    next();
 }
 
 
@@ -182,30 +175,10 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const usuario = usuarios[0];
-
-    // Verificar si la cuenta está bloqueada
-    if (usuario.bloqueado_hasta && new Date(usuario.bloqueado_hasta) > new Date()) {
-        return res.status(403).json({ 
-            message: `Cuenta bloqueada. Intente nuevamente después de ${usuario.bloqueado_hasta}`
-        });
-    }
-
     const esContrasenaValida = await bcrypt.compare(contrasena, usuario.contrasena);
 
     if (!esContrasenaValida) {
-        // Incrementar intentos fallidos
-        const nuevosIntentos = usuario.intentos_fallidos + 1;
-        let bloqueadoHasta = null;
-        
-        if (nuevosIntentos >= 5) {
-            bloqueadoHasta = new Date(Date.now() + 15 * 60000); // Bloquear por 15 minutos
-        }
-        
-        await pool.query(
-            'UPDATE usuarios SET intentos_fallidos = ?, bloqueado_hasta = ? WHERE id = ?',
-            [nuevosIntentos, bloqueadoHasta, usuario.id]
-        );
-        
+        console.log('BACKEND LOGIN: Contraseña incorrecta para:', loginIdentifier);
         return res.status(401).json({ message: 'Credenciales inválidas.' });
     }
     
@@ -216,16 +189,9 @@ app.post('/api/auth/login', async (req, res) => {
     );
 
     const { contrasena: _, ...usuarioParaEnviar } = usuario;
-
-    const token = jwt.sign(
-        { userId: usuario.id, rol: usuario.rol },
-        JWT_SECRET,
-        { expiresIn: '20m' } // Expira en 20 minutos
-    );
     
     res.json({
         message: 'Inicio de sesión exitoso.',
-        token,
         usuario: usuarioParaEnviar
     });
   } catch (error) {
